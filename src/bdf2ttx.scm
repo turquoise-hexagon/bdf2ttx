@@ -273,26 +273,28 @@
                    '() '((0 0) (1 0) (1 1) (0 1))))))
 
 (define (bitmap->xml bounds bitmap)
-  (if (null? bitmap) ""
-      (match bounds
-        ((_ _ _ descent)
-         (let ((height (reverse (iota (length bitmap)))) (width (iota (length (car bitmap)))))
-           (apply string-append
-                  (fold
-                    (lambda (line x acc)
-                      (append acc (fold
-                                    (lambda (char y acc)
-                                      (if (char=? char #\0) acc
-                                          ;; adjust coordinates for descent
-                                          (cons (coordinates->xml y (+ x descent)) acc)))
-                                    '() line width)))
-                    '() bitmap height)))))))
+  (match bounds
+    ((_ _ _ descent)
+     (let ((height (reverse (iota (length bitmap)))) (width (iota (length (car bitmap)))))
+       (apply string-append
+              (fold
+                (lambda (line x acc)
+                  (append acc (fold
+                                (lambda (char y acc)
+                                  (if (char=? char #\0) acc
+                                      ;; adjust coordinates for descent
+                                      (cons (coordinates->xml y (+ x descent)) acc)))
+                                '() line width)))
+                '() bitmap height))))))
 
 (define (character->xml char)
   (match char
     ((properties bitmap)
      (format ttglyph-template
-             (hash-table-ref properties "ENCODING") (bitmap->xml (hash-table-ref properties "BBX") bitmap)))))
+             (hash-table-ref properties "ENCODING")
+             (if (null? bitmap) ""
+                 (let ((bounds (hash-table-ref properties "BBX")))
+                   (bitmap->xml bounds bitmap)))))))
 
 (define (get-lsb bbx bitmap)
   (match bbx
@@ -350,9 +352,7 @@
                    '() chars))))
 
 (define (generate-glyf-xml chars)
-  (format glyf-template
-          (apply string-append
-                 (map character->xml chars))))
+  (format glyf-template (apply string-append (map character->xml chars))))
 
 ;; ---
 ;; argument parsing
