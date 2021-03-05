@@ -2,8 +2,8 @@
 bdf2ttx
 -------
 
-convert bdf to ttx
-==================
+convert BDF files to TTX
+========================
 
 :date: March 2021
 :version: 0.0
@@ -16,7 +16,7 @@ bdf2ttx `<file>`
 
 description
 -----------
-convert a file in bdf format to ttx format
+bdf2ttx converts BDF (Bitmap Distribution Format) files to TTX (TrueType XML)
 
 example
 -------
