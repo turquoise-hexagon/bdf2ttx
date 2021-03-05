@@ -1,0 +1,18 @@
+bdftottx
+========
+
+usage
+-----
+    * program
+        $ make
+        $ bin/bdf2ttx
+    * documentation
+        $ make
+        $ bin/bdf2ttx.1.gz
+
+depends on
+----------
+    * bash
+    * chicken
+    * docutils
+    * make
