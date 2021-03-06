@@ -116,8 +116,8 @@
            (encoding (hash-table-ref properties "ENCODING")))
        (format ttglyph-template encoding (bitmap->xml bounds bitmap))))))
 
-(define (get-lsb bbx bitmap)
-  (match bbx
+(define (get-lsb bounds bitmap)
+  (match bounds
     ((limit _ lsb _)
      ;; find least number of leading 0s
      (let ((lst (map
