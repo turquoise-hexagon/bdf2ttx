@@ -41,11 +41,13 @@
   (let ((properties (make-hash-table)))
     (for-each
       (lambda (property)
-        ;; get property name and its value
-        (let ((match (irregex-match "^([^ ]+) (.+)$" (irregex-replace/all "\"" property ""))))
-          (let ((key (irregex-match-substring match 1))
-                (val (irregex-match-substring match 2)))
-            (hash-table-set! properties key val))))
+        ;; remove quotes
+        (let ((property (irregex-replace/all "\"" property "")))
+          ;; get property name and its value
+          (let ((match (irregex-match "^([^ ]+) (.+)$" property))) 
+            (let ((key (irregex-match-substring match 1))
+                  (val (irregex-match-substring match 2)))
+              (hash-table-set! properties key val)))))
       (extract-properties str))
     properties))
 
@@ -55,7 +57,7 @@
     ;; trim useless information
     (map (cut irregex-replace "ENDCHAR\n" <> "") (cdr chars))))
 
-(define (parse-bitmap bitmap)
+(define (parse-character-bitmap bitmap)
   (map
     (lambda (line)
       ;; convert from hexadecimal to binary & add padding
@@ -75,7 +77,7 @@
 
 (define (parse-character str)
   (match (irregex-split "BITMAP\n" str)
-    ((header bitmap) (list (parse-character-header header) (parse-bitmap bitmap)))
+    ((header bitmap) (list (parse-character-header header) (parse-character-bitmap bitmap)))
     ((header)        (list (parse-character-header header) '()))))
 
 (define (parse-characters str)
