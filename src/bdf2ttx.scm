@@ -112,18 +112,18 @@
 (define (character->xml char)
   (match char
     ((properties bitmap)
-     (format ttglyph-template
-             (hash-table-ref properties "ENCODING") (bitmap->xml (hash-table-ref properties "BBX") bitmap)))))
+     (let ((bounds   (hash-table-ref properties "BBX"))
+           (encoding (hash-table-ref properties "ENCODING")))
+       (format ttglyph-template encoding (bitmap->xml bounds bitmap))))))
 
 (define (get-lsb bbx bitmap)
   (match bbx
     ((limit _ lsb _)
-     (let get-lsb/h ((i 0) (acc lsb))
-       (if (= i limit)
-           acc
-           (if (member #\1 (map (cut list-ref <> i) bitmap))
-               acc
-               (get-lsb/h (+ i 1) (+ acc 1))))))))
+     (let ((lst (map
+                  (lambda (lst)
+                    (length (take-while (cut char=? <> #\0) lst)))
+                  (map (cut take <> limit) bitmap))))
+       (+ lsb (if (null? lst) 0 (apply min lst)))))))
 
 (define (get-number-chars chars)
   (length chars))
@@ -143,8 +143,9 @@
           (apply string-append
                  (fold-right
                    (lambda (char acc)
-                     (let ((encoding (hash-table-ref (car char) "ENCODING")))
-                       (cons (format glyphid-template encoding encoding) acc)))
+                     (let ((properties (car char)))
+                       (let ((encoding (hash-table-ref properties "ENCODING")))
+                         (cons (format glyphid-template encoding encoding) acc))))
                    '() chars))))
 
 (define (generate-hmtx-xml chars)
@@ -154,11 +155,10 @@
                    (lambda (char acc)
                      (match char
                        ((properties bitmap)
-                        (cons (format mtx-template
-                                      (car (hash-table-ref properties "DWIDTH"))
-                                  (get-lsb (hash-table-ref properties "BBX") bitmap)
-                                           (hash-table-ref properties "ENCODING"))
-                              acc))))
+                        (let ((bounds   (hash-table-ref properties "BBX"))
+                              (dwidth   (hash-table-ref properties "DWIDTH"))
+                              (encoding (hash-table-ref properties "ENCODING")))
+                          (cons (format mtx-template (car dwidth) (get-lsb bounds bitmap) encoding) acc)))))
                    '() chars))))
 
 (define (generate-cmap-xml chars)
@@ -166,8 +166,9 @@
           (apply string-append
                  (fold-right
                    (lambda (char acc)
-                     (let ((encoding (hash-table-ref (car char) "ENCODING")))
-                       (cons (format map-template (number->string encoding 16) encoding) acc)))
+                     (let ((properties (car char)))
+                       (let ((encoding (hash-table-ref properties "ENCODING")))
+                         (cons (format map-template (number->string encoding 16) encoding) acc))))
                    '() chars))))
 
 (define (generate-glyf-xml chars)
