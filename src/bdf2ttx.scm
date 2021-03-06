@@ -119,10 +119,12 @@
 (define (get-lsb bbx bitmap)
   (match bbx
     ((limit _ lsb _)
+     ;; find least number of leading 0s
      (let ((lst (map
                   (lambda (lst)
                     (length (take-while (cut char=? <> #\0) lst)))
                   (map (cut take <> limit) bitmap))))
+       ;; fallback to 0 (useful for empty bitmaps)
        (+ lsb (if (null? lst) 0 (apply min lst)))))))
 
 (define (get-number-chars chars)
