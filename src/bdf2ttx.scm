@@ -143,10 +143,10 @@
   (format glyphorder-template
           (apply string-append
                  (fold-right
-                   (lambda (char acc)
-                     (let ((properties (car char)))
-                       (let ((encoding (hash-table-ref properties "ENCODING")))
-                         (cons (format glyphid-template encoding encoding) acc))))
+                   (match-lambda*
+                     (((properties _) acc)
+                      (let ((encoding (hash-table-ref properties "ENCODING")))
+                        (cons (format glyphid-template encoding encoding) acc))))
                    '() chars))))
 
 (define (generate-hmtx-xml chars)
@@ -165,10 +165,10 @@
   (format cmap-template
           (apply string-append
                  (fold-right
-                   (lambda (char acc)
-                     (let ((properties (car char)))
-                       (let ((encoding (hash-table-ref properties "ENCODING")))
-                         (cons (format map-template (number->string encoding 16) encoding) acc))))
+                   (match-lambda*
+                     (((properties _) acc)
+                      (let ((encoding (hash-table-ref properties "ENCODING")))
+                        (cons (format map-template (number->string encoding 16) encoding) acc))))
                    '() chars))))
 
 (define (generate-glyf-xml chars)
