@@ -87,10 +87,9 @@
           (apply string-append
                  ;; draw a pixel using 4 strokes
                  (fold
-                   (lambda (offsets acc)
-                     (match offsets
-                       ((x-offset y-offset)
-                        (cons (format pt-template (+ x x-offset) (+ y y-offset)) acc))))
+                   (match-lambda*
+                     (((x-offset y-offset) acc)
+                      (cons (format pt-template (+ x x-offset) (+ y y-offset)) acc)))
                    '() '((0 0) (1 0) (1 1) (0 1))))))
 
 (define (bitmap->xml bounds bitmap)
@@ -154,13 +153,12 @@
   (format hmtx-template
           (apply string-append
                  (fold-right
-                   (lambda (char acc)
-                     (match char
-                       ((properties bitmap)
-                        (let ((bounds   (hash-table-ref properties "BBX"))
-                              (dwidth   (hash-table-ref properties "DWIDTH"))
-                              (encoding (hash-table-ref properties "ENCODING")))
-                          (cons (format mtx-template (car dwidth) (get-lsb bounds bitmap) encoding) acc)))))
+                   (match-lambda*
+                     (((properties bitmap) acc)
+                      (let ((bounds   (hash-table-ref properties "BBX"))
+                            (dwidth   (hash-table-ref properties "DWIDTH"))
+                            (encoding (hash-table-ref properties "ENCODING")))
+                        (cons (format mtx-template (car dwidth) (get-lsb bounds bitmap) encoding) acc))))
                    '() chars))))
 
 (define (generate-cmap-xml chars)
