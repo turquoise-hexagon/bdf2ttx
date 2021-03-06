@@ -94,21 +94,20 @@
                    '() '((0 0) (1 0) (1 1) (0 1))))))
 
 (define (bitmap->xml bounds bitmap)
-  (if (null? bitmap) ""
-      (match bounds
-        ((width height _ descent)
-         (let ((x-lst (reverse (iota height))) (y-lst (iota width)))
-           (apply string-append
-                  (fold
-                    (lambda (line x acc)
-                      (append acc
-                              (fold
-                                (lambda (char y acc)
-                                  (if (char=? char #\0) acc
-                                      ;; adjust coordinates for descent
-                                      (cons (coordinates->xml y (+ x descent)) acc)))
-                                '() line y-lst)))
-                    '() bitmap x-lst)))))))
+  (match bounds
+    ((width height _ descent)
+     (let ((x-lst (reverse (iota height))) (y-lst (iota width)))
+       (apply string-append
+              (fold
+                (lambda (line x acc)
+                  (append acc
+                          (fold
+                            (lambda (char y acc)
+                              (if (char=? char #\0) acc
+                                  ;; adjust coordinates for descent
+                                  (cons (coordinates->xml y (+ x descent)) acc)))
+                            '() line y-lst)))
+                '() bitmap x-lst))))))
 
 (define (character->xml char)
   (match char
