@@ -44,10 +44,9 @@
         ;; remove quotes
         (let ((property (irregex-replace/all "\"" property "")))
           ;; get property name and its value
-          (let ((match (irregex-match "^([^ ]+) (.+)$" property))) 
-            (let ((key (irregex-match-substring match 1))
-                  (val (irregex-match-substring match 2)))
-              (hash-table-set! properties key val)))))
+          (let ((tmp (irregex-match "^([^ ]+) (.+)$" property))) 
+            (match (map (cut irregex-match-substring tmp <>) '(1 2))
+              ((key val) (hash-table-set! properties key val))))))
       (extract-properties str))
     properties))
 
@@ -97,18 +96,19 @@
 (define (bitmap->xml bounds bitmap)
   (if (null? bitmap) ""
       (match bounds
-        ((_ _ _ descent)
-         (let ((height (reverse (iota (length bitmap)))) (width (iota (length (car bitmap)))))
+        ((width height _ descent)
+         (let ((x-lst (reverse (iota height))) (y-lst (iota width)))
            (apply string-append
                   (fold
                     (lambda (line x acc)
-                      (append acc (fold
-                                    (lambda (char y acc)
-                                      (if (char=? char #\0) acc
-                                          ;; adjust coordinates for descent
-                                          (cons (coordinates->xml y (+ x descent)) acc)))
-                                    '() line width)))
-                    '() bitmap height)))))))
+                      (append acc
+                              (fold
+                                (lambda (char y acc)
+                                  (if (char=? char #\0) acc
+                                      ;; adjust coordinates for descent
+                                      (cons (coordinates->xml y (+ x descent)) acc)))
+                                '() line y-lst)))
+                    '() bitmap x-lst)))))))
 
 (define (character->xml char)
   (match char
