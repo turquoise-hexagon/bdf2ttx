@@ -1,32 +1,17 @@
-;; ---
-;; templates
-;; ---
-
-(define glyf-template "\
-<glyf>
-~a</glyf>
-")
-
 (define contour-template "\
 <contour>
-~a</contour>
+~a
+</contour>
 ")
 
 (define pt-template "\
 <pt x=\"~a\" y=\"~a\" on=\"1\"/>
 ")
 
-(define ttglyph-template "\
-<TTGlyph name=\"char~a\">
-~a<instructions>
-<assembly/>
-</instructions>
-</TTGlyph>
-")
-
 (define glyphorder-template "\
 <GlyphOrder>
-~a</GlyphOrder>
+~a
+</GlyphOrder>
 ")
 
 (define glyphid-template "\
@@ -35,7 +20,8 @@
 
 (define hmtx-template "\
 <hmtx>
-~a</hmtx>
+~a
+</hmtx>
 ")
 
 (define mtx-template "\
@@ -46,17 +32,34 @@
 <cmap>
 <tableVersion version=\"0\"/>
 <cmap_format_4 platformID=\"3\" platEncID=\"1\" language=\"0\">
-~a</cmap_format_4>\n</cmap>
+~a
+</cmap_format_4>\n</cmap>
 ")
 
 (define map-template "\
 <map code=\"0x~a\" name=\"char~a\"/>
 ")
 
+(define glyf-template "\
+<glyf>
+~a
+</glyf>
+")
+
+(define ttglyph-template "\
+<TTGlyph name=\"char~a\">
+~a
+<instructions>
+<assembly/>
+</instructions>
+</TTGlyph>
+")
+
 (define ttx-template "\
 <?xml version=\"1.0\" ?>
 <ttFont sfntVersion=\"\\x00\\x01\\x00\\x00\" ttLibVersion=\"4.2\">
-~a<head>
+~a
+<head>
 <tableVersion value=\"1.0\"/>
 <fontRevision value=\"1.0\"/>
 <checkSumAdjustment value=\"0x41b81b0d\"/>
@@ -156,9 +159,11 @@
 <ulCodePageRange1 value=\"00000000 00000000 00000000 00000011\"/>
 <ulCodePageRange2 value=\"00000000 00000000 00000000 00000000\"/>
 </OS_2>
-~a~a<loca>
+~a~a
+<loca>
 </loca>
-~a<name>
+~a
+<name>
 <namerecord nameID=\"1\" platformID=\"3\" platEncID=\"1\" langID=\"0x409\">
 ~a
 </namerecord>

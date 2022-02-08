@@ -1,199 +1,187 @@
-(import (chicken condition)
-        (chicken io)
-        (chicken irregex)
-        (chicken pathname)
-        (chicken port)
-        (chicken process-context)
-        (chicken string)
-        (format)
-        (matchable)
-        (srfi 1)
-        (srfi 69))
+(import
+  (chicken condition)
+  (chicken format)
+  (chicken io)
+  (chicken irregex)
+  (chicken port)
+  (chicken process-context)
+  (chicken string)
+  (matchable)
+  (srfi 1)
+  (srfi 69)
+  (only (srfi 152) string-pad))
 
 (include-relative "templates.scm")
 
-;; ---
-;; general functions
-;; ---
-
-(define (error-handler status . args)
+(define (errx status . message)
   (with-output-to-port (current-error-port)
-    (lambda () (apply print args)))
+    (lambda () (apply print message)))
   (exit status))
 
+(define (basename path)
+  (last (string-split path "/")))
+
 (define (usage)
-  (error-handler 1 "usage : " (pathname-file (program-name)) " <file>"))
+  (errx 1 "usage : " (basename (program-name)) " [file]"))
 
 (define (import-input path)
   (condition-case (read-string #f (open-input-file path))
-    ((exn) (error-handler 1 "error : failed to open '" path "'"))))
+    ((exn) (errx 1 "error : failed to open '" path "'"))))
 
-;; ---
-;; main functions
-;; ---
-
-(define (extract-properties str)
-  ;; get properties section
-  (let ((properties (irregex-split "(STARTPROPERTIES.*|ENDPROPERTIES)\n" str)))
-    (string-split (cadr properties) "\n")))
-
-(define (parse-properties str)
-  (let ((properties (make-hash-table)))
+(define (parse-properties properties)
+  (let ((acc (make-hash-table)))
     (for-each
       (lambda (property)
-        ;; remove quotes
-        (let ((property (irregex-replace/all "\"" property "")))
-          ;; get property name and its value
-          (let ((tmp (irregex-match "^([^ ]+) (.+)$" property))) 
-            (match (map (cut irregex-match-substring tmp <>) '(1 2))
-              ((key val) (hash-table-set! properties key val))))))
-      (extract-properties str))
-    properties))
+        ;; strip quotes from value
+        (let ((matches (irregex-match "([^ ]+) \"?([^\"]+)\"?" property)))
+          (receive (name value)
+            (apply values
+              (map (cut irregex-match-substring matches <>) '(1 2)))
+            (hash-table-set! acc name value))))
+      (string-split properties "\n"))
+    acc))
 
-(define (extract-characters str)
-  ;; get char sections
-  (let ((chars (irregex-split "(STARTCHAR.*|ENDFONT)\n" str)))
-    ;; trim useless information
-    (map (cut irregex-replace "ENDCHAR\n" <> "") (cdr chars))))
+(define (parse-char-header header)
+  (let ((acc (make-hash-table)))
+    (for-each
+      (lambda (property)
+        (match (string-split property " ")
+          ((name   value) (hash-table-set! acc name (string->number value)))
+          ((name . value) (hash-table-set! acc name (map string->number value)))))
+      (string-split header "\n"))
+    acc))
 
-(define (parse-character-bitmap bitmap)
+(define (parse-char-bitmap bitmap)
   (map
     (lambda (line)
-      ;; convert from hexadecimal to binary & add padding
-      (string->list (apply string-append (map (cut format "~8,,,'0@A" <>)
-        (map (cut number->string <> 2) (map (cut string->number <> 16) line))))))
-    (map (cut string-chop <> 2) (string-split bitmap "\n"))))
+      ;; convert hex to bin and add padding
+      (flatten
+        (map string->list
+          (map (cut string-pad <> 8 #\0)
+            (map (cut number->string <> 2)
+              (map (cut string->number <> 16)
+                (string-chop line 2)))))))
+    (string-split bitmap "\n")))
 
-(define (parse-character-header header)
-  (let ((properties (make-hash-table)))
-    (for-each
-      (lambda (line)
-        (match (string-split line " ")
-          ((key   val) (hash-table-set! properties key     (string->number val)))
-          ((key . val) (hash-table-set! properties key (map string->number val)))))
-      (string-split header "\n"))
-    properties))
+(define (parse-char char)
+  (match (irregex-split "BITMAP\n" char)
+    ;; handle empty bitmaps
+    ((header bitmap)
+     (list (parse-char-header header) (parse-char-bitmap bitmap)))
+    ((header)
+     (list (parse-char-header header) '()))))
 
-(define (parse-character str)
-  (match (irregex-split "BITMAP\n" str)
-    ((header bitmap) (list (parse-character-header header) (parse-character-bitmap bitmap)))
-    ((header)        (list (parse-character-header header) '()))))
+(define (parse-chars chars)
+  (map parse-char chars))
 
-(define (parse-characters str)
-  (map parse-character (extract-characters str)))
+(define (extract-data data)
+  (receive (_ properties _ . chars)
+    (apply values
+      (irregex-split "(START(CHAR|PROPERTIES|FONT).*|END(CHAR|PROPERTIES|FONT))\n" data))
+    (list (parse-properties properties)
+          (parse-chars chars))))
 
-(define (coordinates->xml x y)
+(define (coordinate->xml coordinate)
   (format contour-template
-          (apply string-append
-                 ;; draw a pixel using 4 strokes
-                 (fold
-                   (match-lambda*
-                     (((x-offset y-offset) acc)
-                      (cons (format pt-template (+ x x-offset) (+ y y-offset)) acc)))
-                   '() '((0 0) (1 0) (1 1) (0 1))))))
+    (apply string-append
+      ;; draw a pixel using 4 strokes
+      (map
+        (lambda (offset)
+          (apply format pt-template
+            (map + coordinate offset)))
+        '((0 0) (1 0) (1 1) (0 1))))))
 
-(define (bitmap->xml bounds bitmap)
-  (match bounds
-    ((width height _ descent)
-     (let ((x-lst (reverse (iota height))) (y-lst (iota width)))
-       (apply string-append
-              (fold
-                (lambda (line x acc)
-                  (append acc
-                          (fold
-                            (lambda (char y acc)
-                              (if (char=? char #\0) acc
-                                  ;; adjust coordinates for descent
-                                  (cons (coordinates->xml y (+ x descent)) acc)))
-                            '() line y-lst)))
-                '() bitmap x-lst))))))
+(define (bitmap->xml bbx bitmap)
+  (receive (width height _ descent) (apply values bbx)
+    (let ((x (reverse (iota height descent))) (y (iota width)))
+      (apply string-append
+        (join
+          (map
+            (lambda (x line)
+              (map
+                (lambda (y char)
+                  (if (char=? char #\0) ""
+                    (coordinate->xml (list y x))))
+                y line))
+            x bitmap))))))
 
-(define (character->xml char)
-  (match char
-    ((properties bitmap)
-     (let ((bounds   (hash-table-ref properties "BBX"))
-           (encoding (hash-table-ref properties "ENCODING")))
-       (format ttglyph-template encoding (bitmap->xml bounds bitmap))))))
+(define (get-lsb bbx bitmap)
+  (receive (limit _ lsb _) (apply values bbx)
+    ;; find least number of leading 0s
+    (let ((tmp (map
+                 (lambda (line)
+                   (length (take-while (cut char=? <> #\0) line)))
+                 bitmap)))
+      ;; handle empty bitmaps
+      (+ lsb (if (null? tmp)
+               0
+               (min limit (apply min tmp)))))))
 
-(define (get-lsb bounds bitmap)
-  (match bounds
-    ((limit _ lsb _)
-     ;; find least number of leading 0s
-     (let ((lst (map
-                  (lambda (lst)
-                    (length (take-while (cut char=? <> #\0) lst)))
-                  (map (cut take <> limit) bitmap))))
-       ;; fallback to 0 (useful for empty bitmaps)
-       (+ lsb (if (null? lst) 0 (apply min lst)))))))
-
-(define (get-number-chars chars)
-  (length chars))
-
-(define (get-spacing-fixed properties)
+(define (get-spacing properties)
   (let ((spacing (hash-table-ref properties "SPACING")))
-    (if (member spacing '("p" "P"))
-        "1"
-        "0")))
+    (if (or (string=? spacing "p")
+            (string=? spacing "P"))
+      "1"
+      "0")))
 
 (define (get-font-descent properties)
   (let ((descent (hash-table-ref properties "FONT_DESCENT")))
     (string-append "-" descent)))
 
-(define (generate-glyphorder-xml chars)
+(define (generate-glyphorder-xml chars-properties)
   (format glyphorder-template
-          (apply string-append
-                 (fold-right
-                   (match-lambda*
-                     (((properties _) acc)
-                      (let ((encoding (hash-table-ref properties "ENCODING")))
-                        (cons (format glyphid-template encoding encoding) acc))))
-                   '() chars))))
+    (apply string-append
+      (map
+        (lambda (properties)
+          (let ((encoding (hash-table-ref properties "ENCODING")))
+            (format glyphid-template encoding encoding)))
+        chars-properties))))
 
-(define (generate-hmtx-xml chars)
+(define (generate-hmtx-xml chars-properties chars-bitmaps)
   (format hmtx-template
-          (apply string-append
-                 (fold-right
-                   (match-lambda*
-                     (((properties bitmap) acc)
-                      (let ((bounds   (hash-table-ref properties "BBX"))
-                            (dwidth   (hash-table-ref properties "DWIDTH"))
-                            (encoding (hash-table-ref properties "ENCODING")))
-                        (cons (format mtx-template (car dwidth) (get-lsb bounds bitmap) encoding) acc))))
-                   '() chars))))
+    (apply string-append
+      (map
+        (lambda (properties bitmap)
+          (let ((bbx      (hash-table-ref properties "BBX"))
+                (dwidth   (hash-table-ref properties "DWIDTH"))
+                (encoding (hash-table-ref properties "ENCODING")))
+            (format mtx-template (first dwidth) (get-lsb bbx bitmap) encoding)))
+        chars-properties chars-bitmaps))))
 
-(define (generate-cmap-xml chars)
+(define (generate-cmap-xml chars-properties)
   (format cmap-template
-          (apply string-append
-                 (fold-right
-                   (match-lambda*
-                     (((properties _) acc)
-                      (let ((encoding (hash-table-ref properties "ENCODING")))
-                        (cons (format map-template (number->string encoding 16) encoding) acc))))
-                   '() chars))))
+    (apply string-append
+      (map
+        (lambda (properties)
+          (let ((encoding (hash-table-ref properties "ENCODING")))
+            (format map-template (number->string encoding 16) encoding)))
+        chars-properties))))
 
-(define (generate-glyf-xml chars)
-  (format glyf-template (apply string-append (map character->xml chars))))
-
-;; ---
-;; argument parsing
-;; ---
+(define (generate-glyf-xml chars-properties chars-bitmaps)
+  (format glyf-template
+    (apply string-append
+      (map
+        (lambda (properties bitmap)
+          (let ((bbx      (hash-table-ref properties "BBX"))
+                (encoding (hash-table-ref properties "ENCODING")))
+            (format ttglyph-template encoding (bitmap->xml bbx bitmap))))
+        chars-properties chars-bitmaps))))
 
 (define (main properties chars)
-  (format (current-output-port)
-          ttx-template
-          (generate-glyphorder-xml chars)
-          (hash-table-ref          properties "FONT_ASCENT")
-          (get-font-descent        properties)
-          (get-number-chars        chars)
-          (generate-hmtx-xml       chars)
-          (generate-cmap-xml       chars)
-          (generate-glyf-xml       chars)
-          (hash-table-ref          properties "FAMILY_NAME")
-          (hash-table-ref          properties "FOUNDRY")
-          (get-spacing-fixed       properties)))
+  (receive (chars-properties chars-bitmaps) (unzip2 chars)
+    (format (current-output-port) ttx-template
+      (generate-glyphorder-xml chars-properties)
+      (hash-table-ref          properties "FONT_ASCENT")
+      (get-font-descent        properties)
+      (length                  chars)
+      (generate-hmtx-xml       chars-properties chars-bitmaps)
+      (generate-cmap-xml       chars-properties)
+      (generate-glyf-xml       chars-properties chars-bitmaps)
+      (hash-table-ref          properties "FAMILY_NAME")
+      (hash-table-ref          properties "FOUNDRY")
+      (get-spacing             properties))))
 
 (match (command-line-arguments)
   ((path)
-   (let ((input (import-input path)))
-     (main (parse-properties input) (parse-characters input))))
+   (apply main (extract-data (import-input path))))
   (_ (usage)))
