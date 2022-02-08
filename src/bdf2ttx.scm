@@ -66,10 +66,8 @@
 (define (parse-char char)
   (match (irregex-split "BITMAP\n" char)
     ;; handle empty bitmaps
-    ((header bitmap)
-     (list (parse-char-header header) (parse-char-bitmap bitmap)))
-    ((header)
-     (list (parse-char-header header) '()))))
+    ((header bitmap) (list (parse-char-header header) (parse-char-bitmap bitmap)))
+    ((header)        (list (parse-char-header header) '()))))
 
 (define (parse-chars chars)
   (map parse-char chars))
@@ -100,7 +98,8 @@
             (lambda (x line)
               (map
                 (lambda (y char)
-                  (if (char=? char #\0) ""
+                  (if (char=? char #\0)
+                    ""
                     (coordinate->xml (list y x))))
                 y line))
             x bitmap))))))
