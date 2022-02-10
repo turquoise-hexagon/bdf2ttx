@@ -124,8 +124,8 @@
       "0")))
 
 (define (get-font-descent properties)
-  (let ((descent (hash-table-ref properties "FONT_DESCENT")))
-    (string-append "-" descent)))
+  (string-append "-"
+    (hash-table-ref properties "FONT_DESCENT")))
 
 (define (generate-glyphorder-xml chars-properties)
   (format glyphorder-template
